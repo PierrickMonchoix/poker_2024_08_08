@@ -75,7 +75,7 @@ assert(equityA(pStrategyA=[1,3,0], pStrategyB=[[0,1,1],[1,0,1],[1,1,1],[0,0,1]],
 
 # optimal stategy B from strategy A
 
-def optimalStrategyB(pStrategyA : List[int], pAnte : int, pMaxHand : int) :
+def optimalStrategyB_notFast(pStrategyA : List[int], pAnte : int, pMaxHand : int) :
     lRet : List[List[int]] = []
     # sort and remove duplicates
     lListBetA : List[int] = sorted(set(pStrategyA))
@@ -110,18 +110,85 @@ def optimalStrategyB(pStrategyA : List[int], pAnte : int, pMaxHand : int) :
             lRet = copy.deepcopy(lTestedStategyB)
     return lRet
         
+class Constext_optimalStrategyB_fast:
+    strategyA : List[int]
+    equityA : float
+    testedStategyB : List[List[int]]
+    ante : int
+    ret : List[List[List[int]]]
+
+    def __init__(self, strategyA, equityA, testedStategyB, ante, ret):
+        self.strategyA = strategyA
+        self.equityA = equityA
+        self.testedStategyB = testedStategyB
+        self.ante = ante
+        self.ret = ret
+
+def treat_optimalStrategyB_fast(pContext : Constext_optimalStrategyB_fast) :
+    #print("lTestedStategyB : " + str(pContext.testedStategyB))
+    lTestedEquityA = equityA(pStrategyA=pContext.strategyA, pStrategyB=pContext.testedStategyB, pAnte=pContext.ante)
+    #print(str(lTestedEquityA) + " vs " + str(lEquityA))
+    # A must lose to maximize B equity
+    if(lTestedEquityA < pContext.equityA) :
+        # print("win : " + str(pContext.testedStategyB))
+        pContext.equityA = lTestedEquityA
+        pContext.ret[0] = copy.deepcopy(pContext.testedStategyB)
+
+def rec_optimalStrategyB_fast(pListBetA : List[int], pContext : Constext_optimalStrategyB_fast, pIndexBetA : int = 0, pFirstTime : bool = True) :
+    lBetA : int = pListBetA[pIndexBetA]
+    pContext.testedStategyB[lBetA] = [0]*len(pContext.testedStategyB[lBetA])
+    if(pFirstTime) :
+        for lHandB in range(len(pContext.testedStategyB[lBetA])-1, -1, -1) :
+            for lIndexBetA in range(len(pListBetA)-1, pIndexBetA, -1) :
+                rec_optimalStrategyB_fast(pListBetA = pListBetA, pContext = pContext, pIndexBetA = lIndexBetA, pFirstTime = False)
+
+    for lHandB in range(len(pContext.testedStategyB[lBetA])-1, -1, -1) :
+        if(pIndexBetA == len(pListBetA)-1) :
+            treat_optimalStrategyB_fast(pContext)
+            pContext.testedStategyB[lBetA][lHandB] = 1
+            if(lHandB == 0) :
+                treat_optimalStrategyB_fast(pContext)
+        else :
+            pContext.testedStategyB[lBetA][lHandB] = 1
+            for lIndexBetA in range(len(pListBetA)-1, pIndexBetA, -1) :
+                rec_optimalStrategyB_fast(pListBetA = pListBetA, pContext = pContext, pIndexBetA = lIndexBetA, pFirstTime = False)
+            
+    pContext.testedStategyB[lBetA] = [0]*len(pContext.testedStategyB[lBetA])
+    
+            
+
+def optimalStrategyB(pStrategyA : List[int], pAnte : int) :
+    lRet : List[List[int]] = []
+    # sort and remove duplicates
+    lListBetA : List[int] = sorted(set(pStrategyA))
+    for lBetA in range(0, lListBetA[-1] + 1):
+        if(lBetA in lListBetA) :
+            lRet.append([0]*(len(pStrategyA)))
+        else :
+            lRet.append(None)
+    lEquityA = equityA(pStrategyA=pStrategyA, pStrategyB=lRet,pAnte=5)
+
+    lDoBFoldSomeThing : bool = True
+    lTestedStategyB : List[List[int]] = copy.deepcopy(lRet)
+
+    lPointerRet = [lRet]
+    
+    rec_optimalStrategyB_fast(pListBetA=lListBetA, pIndexBetA=0, pContext=Constext_optimalStrategyB_fast(pStrategyA, lEquityA, lTestedStategyB, pAnte, lPointerRet))
+    lRet = lPointerRet[0]
+    return lRet
 
 # not claculously checked
-assert(optimalStrategyB(pStrategyA=[1,1], pAnte=1, pMaxHand=1) == [None, [0, 1]])
-assert(optimalStrategyB(pStrategyA=[1,1], pAnte=2, pMaxHand=1) == [None, [1, 1]])
+assert(optimalStrategyB(pStrategyA=[1,1], pAnte=1) == [None, [0, 1]])
+assert(optimalStrategyB(pStrategyA=[1,1], pAnte=2) == [None, [1, 1]])
+optimalStrategyB(pStrategyA=[0,1], pAnte=2)
+optimalStrategyB(pStrategyA=[0,1,2], pAnte=2)
 
 # optimal stategy A and then B for that given A
 
 def optimalStrategies(pMaxBet : int, pMaxHand : int, pAnte : int) :
     lStrategyA : List[int] = [0]*(pMaxHand+1)
-    lSavedStrategyB : List[List[int]] = optimalStrategyB(pStrategyA=lStrategyA, pAnte=pAnte, pMaxHand=pMaxHand)
+    lSavedStrategyB : List[List[int]] = optimalStrategyB(pStrategyA=lStrategyA, pAnte=pAnte)
     lEquityA = equityA(pStrategyA=lStrategyA, pStrategyB=lSavedStrategyB,pAnte=pAnte)
-    print(lStrategyA)
     lTestedStrategyA = copy.deepcopy(lStrategyA)
     for lK in range(0,pow(pMaxBet+1, pMaxHand+1)-1) :
         for lHandA in range(0,pMaxHand+1) :
@@ -130,10 +197,10 @@ def optimalStrategies(pMaxBet : int, pMaxHand : int, pAnte : int) :
             else :
                 lTestedStrategyA[lHandA] += 1
                 break
-        
-        lStrategyB = copy.deepcopy(optimalStrategyB(pStrategyA=lTestedStrategyA, pMaxHand=pMaxHand, pAnte=pAnte))
+        print("   lTestedStrategyA " + str(lTestedStrategyA))
+        lStrategyB = copy.deepcopy(optimalStrategyB(pStrategyA=lTestedStrategyA, pAnte=pAnte))
+        #print("   lStrategyB " + str(lStrategyB))
         lTestedEquityA = equityA(pStrategyA=lTestedStrategyA, pStrategyB=lStrategyB, pAnte=pAnte)
-        print(lTestedStrategyA)
         # print(lStrategyB)
         # print(lTestedEquityA)
         if(lTestedEquityA > lEquityA) :
@@ -155,7 +222,7 @@ def optimalStrategies(pMaxBet : int, pMaxHand : int, pAnte : int) :
             
 
 
-optimalStrategies(pMaxBet=3, pMaxHand=4, pAnte=5)
+optimalStrategies(pMaxBet=3, pMaxHand=5, pAnte=5)
 
 
     
